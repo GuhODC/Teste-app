@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>SCAN3D — Permissão de Câmera</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap');
+
+:root {
+  --bg: #050507;
+  --surface: #0e0e12;
+  --border: #1e1e28;
+  --accent: #00ffc8;
+  --accent2: #ff3d6b;
+  --text: #c8ccd8;
+  --dim: #3a3a48;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; min-height: 100%; background: var(--bg); color: var(--text); font-family: 'Space Mono', monospace; }
+
+/* ── TELA DE PERMISSÃO ── */
+#perm-screen {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 32px 24px;
+  gap: 0;
+}
+
+.brand {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 48px; color: var(--accent);
+  letter-spacing: .06em;
+  animation: fi .6s both;
+}
+
+.cam-icon {
+  font-size: 64px;
+  margin: 20px 0 10px;
+  animation: fi .6s .1s both;
+  display: block;
+  text-align: center;
+}
+
+.perm-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 34px; color: #fff;
+  text-align: center; line-height: 1.1;
+  animation: fi .6s .15s both;
+}
+
+.perm-sub {
+  font-size: 10px; letter-spacing: .12em;
+  color: var(--dim); text-align: center;
+  margin-top: 10px; line-height: 1.9;
+  animation: fi .6s .2s both;
+}
+
+.divider {
+  width: 1px; height: 40px;
+  background: linear-gradient(to bottom, var(--accent), transparent);
+  margin: 24px auto;
+  animation: grow .6s .25s both;
+}
+
+/* Botão principal de pedir permissão */
+#btn-request {
+  width: 100%; max-width: 340px;
+  background: var(--accent);
+  color: var(--bg);
+  border: none; padding: 20px;
+  font-family: 'Space Mono', monospace;
+  font-size: 13px; letter-spacing: .22em;
+  text-transform: uppercase; cursor: pointer;
+  transition: all .2s;
+  animation: fi .6s .3s both;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+#btn-request:active { background: #fff; transform: scale(.98); }
+
+/* Status feedback */
+#status-box {
+  width: 100%; max-width: 340px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: none;
+  animation: fi .4s both;
+}
+#status-box.show { display: block; }
+
+.status-row {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 10px; letter-spacing: .1em;
+}
+.status-indicator {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--dim);
+  transition: background .3s;
+}
+.status-indicator.ok  { background: var(--accent); animation: pulse 1s infinite; }
+.status-indicator.err { background: var(--accent2); }
+.status-indicator.wait{ background: #f5a623; animation: pulse 1s infinite; }
+
+#status-text { color: var(--text); }
+
+/* ── PREVIEW DA CÂMERA ── */
+#cam-preview {
+  width: 100%; max-width: 340px;
+  margin-top: 16px;
+  position: relative;
+  display: none;
+  animation: fi .5s both;
+}
+#cam-preview.show { display: block; }
+
+#video-live {
+  width: 100%; border-radius: 2px;
+  display: block;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 24px rgba(0,255,200,.15);
+}
+
+.cam-overlay {
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+.cam-corner {
+  position: absolute; width: 18px; height: 18px;
+}
+.cam-corner.tl { top: 8px; left: 8px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+.cam-corner.tr { top: 8px; right: 8px; border-top: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+.cam-corner.bl { bottom: 8px; left: 8px; border-bottom: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+.cam-corner.br { bottom: 8px; right: 8px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+
+.cam-scan-line {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: scanLine 2s linear infinite;
+}
+@keyframes scanLine { 0% { top: 0; opacity:1; } 90% { opacity:1; } 100% { top: 100%; opacity:0; } }
+
+.cam-label {
+  position: absolute; bottom: 14px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(5,5,7,.8);
+  border: 1px solid var(--accent);
+  padding: 5px 12px;
+  font-size: 9px; letter-spacing: .2em;
+  color: var(--accent); text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Botão de ir para o scanner */
+#btn-go {
+  width: 100%; max-width: 340px;
+  background: var(--accent);
+  color: var(--bg);
+  border: none; padding: 18px;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; letter-spacing: .22em;
+  text-transform: uppercase; cursor: pointer;
+  transition: all .2s; margin-top: 14px;
+  display: none;
+}
+#btn-go.show { display: block; animation: fi .5s both; }
+#btn-go:active { background: #fff; transform: scale(.98); }
+
+/* ── GUIA MANUAL (quando bloqueado) ── */
+#manual-guide {
+  width: 100%; max-width: 340px;
+  margin-top: 16px;
+  display: none;
+}
+#manual-guide.show { display: flex; flex-direction: column; gap: 0; animation: fi .5s both; }
+
+.guide-title {
+  font-size: 9px; letter-spacing: .3em;
+  color: var(--accent2); text-transform: uppercase;
+  margin-bottom: 14px; text-align: center;
+}
+
+.guide-step {
+  display: flex; gap: 0;
+  position: relative;
+}
+.guide-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 17px; top: 36px;
+  width: 1px; height: calc(100% - 10px);
+  background: var(--border);
+}
+
+.step-circle {
+  width: 34px; height: 34px;
+  border: 1px solid var(--accent2);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px; color: var(--accent2);
+  flex-shrink: 0;
+  background: rgba(255,61,107,.05);
+  margin-top: 0;
+}
+
+.step-content {
+  padding: 6px 0 20px 14px;
+}
+.step-label {
+  font-size: 11px; font-weight: 700;
+  color: #fff; letter-spacing: .05em;
+  margin-bottom: 4px;
+}
+.step-desc {
+  font-size: 9px; letter-spacing: .08em;
+  color: var(--dim); line-height: 1.9;
+}
+.step-desc strong { color: var(--text); }
+
+/* Botão tentar de novo */
+#btn-retry {
+  width: 100%; padding: 16px;
+  background: transparent;
+  border: 1px solid var(--accent2);
+  color: var(--accent2);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: .2em;
+  text-transform: uppercase; cursor: pointer;
+  transition: all .2s; margin-top: 4px;
+}
+#btn-retry:active { background: rgba(255,61,107,.1); }
+
+/* ── SCANNER (segunda tela) ── */
+#scanner-screen {
+  min-height: 100vh;
+  display: none; flex-direction: column;
+  background: #000;
+}
+#scanner-screen.show { display: flex; }
+
+#video-wrap {
+  position: relative; flex: 1; overflow: hidden;
+}
+#video-scan { width: 100%; height: 100%; object-fit: cover; opacity: .5; }
+#depth-canvas, #points-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#scan-grid {
+  position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(0,255,200,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,200,.025) 1px, transparent 1px);
+  background-size: 36px 36px; pointer-events: none;
+}
+#scan-anim {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 14px var(--accent);
+  animation: scanLine 2s linear infinite; pointer-events: none; opacity: 0;
+}
+.sc { position: absolute; width: 22px; height: 22px; pointer-events: none; }
+.sc.tl { top:16px; left:16px; border-top:2px solid var(--accent); border-left:2px solid var(--accent); }
+.sc.tr { top:16px; right:16px; border-top:2px solid var(--accent); border-right:2px solid var(--accent); }
+.sc.bl { bottom:16px; left:16px; border-bottom:2px solid var(--accent); border-left:2px solid var(--accent); }
+.sc.br { bottom:16px; right:16px; border-bottom:2px solid var(--accent); border-right:2px solid var(--accent); }
+
+#scan-hud-top {
+  position: absolute; top:0; left:0; right:0;
+  padding: 14px 18px;
+  display: flex; align-items:center; justify-content:space-between;
+  background: linear-gradient(to bottom, rgba(5,5,7,.9), transparent);
+}
+.s-brand { font-family:'Bebas Neue',sans-serif; font-size:22px; color:var(--accent); letter-spacing:.08em; }
+.s-status { display:flex; align-items:center; gap:6px; font-size:9px; letter-spacing:.2em; color:var(--dim); text-transform:uppercase; }
+.sdot { width:6px; height:6px; border-radius:50%; background:var(--dim); transition:background .3s; }
+.sdot.on { background:var(--accent); animation:pulse 1s infinite; }
+
+#metrics {
+  position: absolute; right:10px; top:50%; transform:translateY(-50%);
+  display: flex; flex-direction:column; gap:10px;
+}
+.mbox { background:rgba(14,14,18,.85); border:1px solid var(--border); padding:8px 10px; text-align:right; min-width:64px; }
+.mval { font-family:'Bebas Neue',sans-serif; font-size:22px; color:var(--accent); line-height:1; }
+.mlbl { font-size:7px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; margin-top:2px; }
+
+#scan-hud-bot {
+  position: absolute; bottom:0; left:0; right:0;
+  padding:16px; background:linear-gradient(to top, rgba(5,5,7,.95), transparent);
+  display:flex; flex-direction:column; gap:10px;
+}
+#prog-wrap { display:flex; align-items:center; gap:10px; }
+#prog-bg { flex:1; height:3px; background:var(--border); overflow:hidden; }
+#prog-fill { height:100%; background:linear-gradient(90deg,var(--accent),#00e5ff); width:0%; transition:width .3s; box-shadow:0 0 8px var(--accent); }
+#prog-pct { font-size:10px; color:var(--accent); letter-spacing:.1em; min-width:34px; text-align:right; }
+#ctrl-row { display:flex; gap:8px; }
+.bctr { flex:1; padding:13px 6px; border:1px solid var(--border); background:rgba(14,14,18,.9); color:var(--text); font-family:'Space Mono',monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
+.bctr:active { transform:scale(.97); }
+.bctr.pr { border-color:var(--accent); color:var(--accent); background:rgba(0,255,200,.06); }
+.bctr.dn { border-color:var(--accent2); color:var(--accent2); background:rgba(255,61,107,.06); }
+.bctr.hid { display:none!important; }
+#instr { font-size:10px; letter-spacing:.1em; color:var(--dim); text-align:center; line-height:1.7; }
+
+/* VIEWER */
+#viewer-screen {
+  min-height:100vh; display:none; flex-direction:column; background:var(--bg);
+}
+#viewer-screen.show { display:flex; }
+#viewer-header { padding:16px 18px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); flex-shrink:0; }
+.vtitle { font-family:'Bebas Neue',sans-serif; font-size:26px; color:var(--accent); }
+.vpts { font-size:9px; letter-spacing:.12em; color:var(--dim); margin-top:2px; }
+#three-canvas { flex:1; width:100%; display:block; touch-action:none; }
+#viewer-btns { padding:14px 18px; border-top:1px solid var(--border); flex-shrink:0; display:flex; gap:8px; }
+#touch-hint { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; animation:fadeOut 1s 2.5s forwards; z-index:10; }
+@keyframes fadeOut { to { opacity:0; } }
+.ticon { font-size:28px; display:block; margin-bottom:8px; }
+.ttext { font-size:9px; letter-spacing:.2em; color:var(--dim); text-transform:uppercase; }
+
+@keyframes fi { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+@keyframes grow { from{transform:scaleY(0)} to{transform:scaleY(1)} }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+</style>
+</head>
+<body>
+
+<!-- ═══ TELA DE PERMISSÃO ═══ -->
+<div id="perm-screen">
+  <div class="brand">SCAN3D</div>
+  <span class="cam-icon">📷</span>
+  <div class="perm-title">Precisamos da<br>sua câmera</div>
+  <p class="perm-sub">Para escanear o ambiente em 3D<br>precisamos acessar a câmera do celular</p>
+  <div class="divider"></div>
+
+  <button id="btn-request">
+    <span>🔓</span> Permitir câmera agora
+  </button>
+
+  <!-- Feedback de status -->
+  <div id="status-box">
+    <div class="status-row">
+      <div class="status-indicator" id="status-dot"></div>
+      <span id="status-text">Solicitando permissão...</span>
+    </div>
+  </div>
+
+  <!-- Preview ao vivo quando permitido -->
+  <div id="cam-preview">
+    <video id="video-live" autoplay playsinline muted></video>
+    <div class="cam-overlay">
+      <div class="cam-corner tl"></div>
+      <div class="cam-corner tr"></div>
+      <div class="cam-corner bl"></div>
+      <div class="cam-corner br"></div>
+      <div class="cam-scan-line"></div>
+      <div class="cam-label">câmera ativa ✓</div>
+    </div>
+  </div>
+
+  <button id="btn-go">🚀 Iniciar Scanner 3D →</button>
+
+  <!-- Guia manual quando bloqueado -->
+  <div id="manual-guide">
+    <div class="guide-title">Como liberar manualmente</div>
+
+    <div class="guide-step">
+      <div class="step-circle">1</div>
+      <div class="step-content">
+        <div class="step-label">Toque no ícone 🔒</div>
+        <div class="step-desc">Na barra de endereço do Chrome,<br>toque no ícone de <strong>cadeado</strong> ou <strong>ⓘ</strong></div>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="step-circle">2</div>
+      <div class="step-content">
+        <div class="step-label">Permissões do site</div>
+        <div class="step-desc">Toque em <strong>"Permissões"</strong><br>na lista que aparecer</div>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="step-circle">3</div>
+      <div class="step-content">
+        <div class="step-label">Ative a Câmera</div>
+        <div class="step-desc">Encontre <strong>"Câmera"</strong> e<br>mude de <strong>Bloqueado → Permitir</strong></div>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="step-circle">4</div>
+      <div class="step-content">
+        <div class="step-label">Recarregue</div>
+        <div class="step-desc">Volte e toque em<br><strong>"Tentar novamente"</strong> abaixo</div>
+      </div>
+    </div>
+
+    <button id="btn-retry">↺ Tentar novamente</button>
+  </div>
+</div>
+
+<!-- ═══ SCANNER ═══ -->
+<div id="scanner-screen">
+  <div id="video-wrap">
+    <video id="video-scan" autoplay playsinline muted></video>
+    <canvas id="depth-canvas"></canvas>
+    <canvas id="points-canvas"></canvas>
+    <div id="scan-grid"></div>
+    <div id="scan-anim"></div>
+    <div class="sc tl"></div><div class="sc tr"></div>
+    <div class="sc bl"></div><div class="sc br"></div>
+
+    <div id="scan-hud-top">
+      <div class="s-brand">SCAN3D</div>
+      <div class="s-status"><div class="sdot on" id="sdot"></div><span id="stext">câmera ativa</span></div>
+    </div>
+
+    <div id="metrics">
+      <div class="mbox"><div class="mval" id="pts-n">0</div><div class="mlbl">Pontos</div></div>
+      <div class="mbox"><div class="mval" id="frm-n">0</div><div class="mlbl">Frames</div></div>
+      <div class="mbox"><div class="mval" id="cov-n">0%</div><div class="mlbl">Cobertura</div></div>
+    </div>
+
+    <div id="scan-hud-bot">
+      <div id="prog-wrap">
+        <div id="prog-bg"><div id="prog-fill"></div></div>
+        <div id="prog-pct">0%</div>
+      </div>
+      <div id="instr">Toque em Iniciar e mova o celular pelo ambiente</div>
+      <div id="ctrl-row">
+        <button class="bctr" id="btn-flip">↩ Câmera</button>
+        <button class="bctr pr" id="btn-scan">⏺ Iniciar</button>
+        <button class="bctr dn hid" id="btn-ver3d">▶ Ver 3D</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VIEWER 3D ═══ -->
+<div id="viewer-screen">
+  <div id="viewer-header">
+    <div>
+      <div class="vtitle">Ambiente 3D</div>
+      <div class="vpts" id="vpts-lbl">0 pontos</div>
+    </div>
+    <button class="bctr" id="btn-back" style="min-width:76px">← Voltar</button>
+  </div>
+  <canvas id="three-canvas"></canvas>
+  <div id="viewer-btns">
+    <button class="bctr pr" id="btn-rescan" style="flex:1">⟳ Novo Scan</button>
+    <button class="bctr" id="btn-resetv" style="flex:1">⊡ Reset Visão</button>
+  </div>
+  <div id="touch-hint">
+    <span class="ticon">👆</span>
+    <span class="ttext">Arraste · Pinça para zoom</span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let camStream, facingMode = 'environment';
+let scanning = false, scanInt = null, frameCount = 0;
+let pointCloud = [], coverageGrid = new Set();
+const GRID = 16;
+
+// ══════════════════════════════════════
+// PERMISSÃO
+// ══════════════════════════════════════
+$('btn-request').addEventListener('click', requestCamera);
+$('btn-retry').addEventListener('click', () => {
+  $('manual-guide').classList.remove('show');
+  $('status-box').classList.remove('show');
+  requestCamera();
+});
+
+async function requestCamera() {
+  $('status-box').classList.add('show');
+  setStatus('wait', 'Solicitando permissão...');
+
+  try {
+    // Para qualquer stream anterior
+    if (camStream) camStream.getTracks().forEach(t => t.stop());
+
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+
+    // Sucesso!
+    setStatus('ok', '✓ Câmera liberada com sucesso!');
+
+    // Mostra preview
+    const videoLive = $('video-live');
+    videoLive.srcObject = camStream;
+    await videoLive.play();
+    $('cam-preview').classList.add('show');
+    $('btn-go').classList.add('show');
+    $('btn-request').style.display = 'none';
+    $('manual-guide').classList.remove('show');
+
+  } catch (err) {
+    let msg = '';
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      msg = '🔒 Permissão negada — siga o guia abaixo';
+      $('manual-guide').classList.add('show');
+    } else if (err.name === 'NotFoundError') {
+      msg = '❌ Nenhuma câmera encontrada';
+    } else if (err.name === 'NotSupportedError') {
+      msg = '⚠️ Requer HTTPS — use via Claude.ai';
+    } else {
+      msg = '⚠️ Erro: ' + err.message;
+      $('manual-guide').classList.add('show');
+    }
+    setStatus('err', msg);
+  }
+}
+
+function setStatus(type, text) {
+  const dot = $('status-dot');
+  dot.className = 'status-indicator ' + type;
+  $('status-text').textContent = text;
+}
+
+// ══════════════════════════════════════
+// ENTRAR NO SCANNER
+// ══════════════════════════════════════
+$('btn-go').addEventListener('click', () => {
+  // Para o preview e passa o stream pro scanner
+  $('video-live').srcObject = null;
+  $('perm-screen').style.display = 'none';
+  $('scanner-screen').classList.add('show');
+
+  const videoScan = $('video-scan');
+  videoScan.srcObject = camStream;
+  videoScan.play();
+  resizeCanvases();
+});
+
+$('btn-flip').addEventListener('click', async () => {
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width:{ideal:640}, height:{ideal:480} }
+    });
+    $('video-scan').srcObject = camStream;
+    $('video-scan').play();
+  } catch(e) {}
+});
+
+function resizeCanvases() {
+  const wrap = $('video-wrap');
+  ['depth-canvas','points-canvas'].forEach(id => {
+    $(id).width = wrap.clientWidth;
+    $(id).height = wrap.clientHeight;
+  });
+}
+
+// ══════════════════════════════════════
+// SCAN
+// ══════════════════════════════════════
+$('btn-scan').addEventListener('click', () => scanning ? stopScan() : startScan());
+
+function startScan() {
+  scanning = true;
+  $('scan-anim').style.opacity = '1';
+  $('btn-scan').textContent = '⏹ Parar';
+  $('btn-scan').classList.remove('pr'); $('btn-scan').classList.add('dn');
+  $('stext').textContent = 'escaneando';
+  scanInt = setInterval(captureFrame, 200);
+}
+
+function stopScan() {
+  scanning = false;
+  clearInterval(scanInt);
+  $('scan-anim').style.opacity = '0';
+  $('btn-scan').textContent = '⏺ Iniciar';
+  $('btn-scan').classList.add('pr'); $('btn-scan').classList.remove('dn');
+  $('stext').textContent = 'pausado';
+  if (pointCloud.length > 50) $('btn-ver3d').classList.remove('hid');
+}
+
+function captureFrame() {
+  const video = $('video-scan');
+  if (video.readyState < 2) return;
+
+  const SW = 80, SH = 60;
+  const off = document.createElement('canvas');
+  off.width = SW; off.height = SH;
+  const ctx = off.getContext('2d');
+  ctx.drawImage(video, 0, 0, SW, SH);
+  const px = ctx.getImageData(0, 0, SW, SH).data;
+
+  const dc = $('depth-canvas'), dw = dc.width, dh = dc.height;
+  const dctx = dc.getContext('2d');
+  dctx.clearRect(0, 0, dw, dh);
+
+  const pts = [];
+  for (let py = 0; py < SH; py += 2) {
+    for (let x = 0; x < SW; x += 2) {
+      const i = (py * SW + x) * 4;
+      const r = px[i], g = px[i+1], b = px[i+2];
+      const bright = (r + g + b) / 3;
+      const sat = Math.max(r,g,b) - Math.min(r,g,b);
+      const depth = 0.5 + ((255 - bright * .6 - sat * .4) / 255) * 4.5;
+      const nx = (x / SW - .5) * 2, ny = -(py / SH - .5) * 2;
+      const j = (Math.random() - .5) * .08;
+      pts.push({ x: nx * depth * .9 + j, y: ny * depth * .6 + j, z: -depth + frameCount * .015, r, g, b });
+      const hue = (1 - depth / 5) * 180;
+      dctx.fillStyle = `hsla(${hue},100%,55%,.28)`;
+      dctx.fillRect(x * (dw/SW), py * (dh/SH), (dw/SW)*2+1, (dh/SH)*2+1);
+    }
+  }
+
+  const sub = pointCloud.length > 8000 ? 4 : 2;
+  for (let i = 0; i < pts.length; i += sub) pointCloud.push(pts[i]);
+
+  for (let gy = 0; gy < GRID; gy++) for (let gx = 0; gx < GRID; gx++) {
+    const x0=Math.floor(gx*SW/GRID), y0=Math.floor(gy*SH/GRID);
+    const x1=Math.floor((gx+1)*SW/GRID), y1=Math.floor((gy+1)*SH/GRID);
+    let s=0,c=0;
+    for(let y=y0;y<y1;y+=2) for(let x2=x0;x2<x1;x2+=2){
+      const ii=(y*SW+x2)*4; s+=(px[ii]+px[ii+1]+px[ii+2])/3; c++;
+    }
+    if(c>0&&s/c>10) coverageGrid.add(`${gx}-${gy}`);
+  }
+
+  const pc = $('points-canvas'), pctx = pc.getContext('2d');
+  pts.forEach((p,i) => {
+    if (i % 3) return;
+    pctx.fillStyle = `rgba(${p.r},${p.g},${p.b},.55)`;
+    pctx.fillRect(((p.x/5+.5))*pc.width, ((-p.y/3+.5))*pc.height, 1.5, 1.5);
+  });
+
+  frameCount++;
+  const cov = Math.min(100, Math.round((coverageGrid.size/(GRID*GRID))*300));
+  const n = pointCloud.length;
+  $('pts-n').textContent = n > 999 ? (n/1000).toFixed(1)+'k' : n;
+  $('frm-n').textContent = frameCount;
+  $('cov-n').textContent = cov + '%';
+  $('prog-fill').style.width = cov + '%';
+  $('prog-pct').textContent = cov + '%';
+
+  if (cov < 20)      $('instr').textContent = 'Mova o celular lentamente pelo ambiente';
+  else if (cov < 50) $('instr').textContent = 'Ótimo! Continue pelas bordas e cantos';
+  else if (cov < 80) $('instr').textContent = 'Quase lá! Capture teto e chão também';
+  else { $('instr').textContent = '✓ Boa cobertura! Pode visualizar em 3D'; $('btn-ver3d').classList.remove('hid'); }
+}
+
+$('btn-ver3d').addEventListener('click', () => { stopScan(); buildViewer(); $('scanner-screen').classList.remove('show'); $('viewer-screen').classList.add('show'); });
+$('btn-back').addEventListener('click',  () => { $('viewer-screen').classList.remove('show'); $('scanner-screen').classList.add('show'); });
+$('btn-rescan').addEventListener('click', () => {
+  pointCloud = []; coverageGrid.clear(); frameCount = 0;
+  $('pts-n').textContent='0'; $('frm-n').textContent='0'; $('cov-n').textContent='0%';
+  $('prog-fill').style.width='0%'; $('prog-pct').textContent='0%';
+  $('btn-ver3d').classList.add('hid');
+  ['depth-canvas','points-canvas'].forEach(id => { const c=$(id); c.getContext('2d').clearRect(0,0,c.width,c.height); });
+  $('viewer-screen').classList.remove('show');
+  $('scanner-screen').classList.add('show');
+});
+$('btn-resetv').addEventListener('click', resetViewCam);
+
+// ══════════════════════════════════════
+// THREE.JS VIEWER
+// ══════════════════════════════════════
+let tScene, tCam, tRen, tPts;
+let drag=false, lastT=null, pinchD=0;
+let sph = { theta:0, phi:1.2, r:8 };
+
+function buildViewer() {
+  const canvas = $('three-canvas');
+  const hh = $('viewer-header').offsetHeight + $('viewer-btns').offsetHeight;
+  const W = window.innerWidth, H = window.innerHeight - hh;
+  canvas.width = W; canvas.height = H;
+  $('vpts-lbl').textContent = pointCloud.length.toLocaleString('pt-BR') + ' pontos capturados';
+
+  if (!tRen) {
+    tRen = new THREE.WebGLRenderer({ canvas, antialias:false, alpha:true });
+    tRen.setPixelRatio(1);
+    tRen.setClearColor(0x050507, 1);
+  }
+  tRen.setSize(W, H);
+  tScene = new THREE.Scene();
+  tCam = new THREE.PerspectiveCamera(65, W/H, .01, 200);
+  updateViewCam();
+
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(pointCloud.length * 3);
+  const col = new Float32Array(pointCloud.length * 3);
+  let cx=0,cy=0,cz=0;
+  pointCloud.forEach(p => { cx+=p.x; cy+=p.y; cz+=p.z; });
+  cx/=pointCloud.length; cy/=pointCloud.length; cz/=pointCloud.length;
+  pointCloud.forEach((p,i) => {
+    pos[i*3]=p.x-cx; pos[i*3+1]=p.y-cy; pos[i*3+2]=p.z-cz;
+    col[i*3]=p.r/255; col[i*3+1]=p.g/255; col[i*3+2]=p.b/255;
+  });
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col,3));
+  const mat = new THREE.PointsMaterial({ size:.035, vertexColors:true, sizeAttenuation:true, transparent:true, opacity:.9 });
+  tPts = new THREE.Points(geo, mat);
+  tScene.add(tPts);
+  tScene.add(new THREE.GridHelper(12, 24, 0x1e1e28, 0x1e1e28));
+  tScene.add(new THREE.AmbientLight(0x00ffc8, .25));
+
+  let vId;
+  (function loop(){ vId=requestAnimationFrame(loop); if(tPts) tPts.rotation.y+=.0008; tRen.render(tScene,tCam); })();
+
+  const c = $('three-canvas');
+  c.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if(e.touches.length===1){ drag=true; lastT={x:e.touches[0].clientX,y:e.touches[0].clientY}; }
+    else if(e.touches.length===2) pinchD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  },{passive:false});
+  c.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if(e.touches.length===1&&drag&&lastT){
+      sph.theta-=(e.touches[0].clientX-lastT.x)*.008;
+      sph.phi=Math.max(.15,Math.min(Math.PI-.15,sph.phi+(e.touches[0].clientY-lastT.y)*.008));
+      lastT={x:e.touches[0].clientX,y:e.touches[0].clientY}; updateViewCam();
+    } else if(e.touches.length===2){
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      sph.r=Math.max(1,Math.min(22,sph.r+(pinchD-d)*.02)); pinchD=d; updateViewCam();
+    }
+  },{passive:false});
+  c.addEventListener('touchend', ()=>{ drag=false; lastT=null; });
+}
+
+function updateViewCam(){
+  if(!tCam) return;
+  tCam.position.set(sph.r*Math.sin(sph.phi)*Math.sin(sph.theta),sph.r*Math.cos(sph.phi),sph.r*Math.sin(sph.phi)*Math.cos(sph.theta));
+  tCam.lookAt(0,0,0);
+}
+function resetViewCam(){ sph={theta:0,phi:1.2,r:8}; updateViewCam(); }
+
+window.addEventListener('resize', () => {
+  resizeCanvases();
+  if(tRen&&tCam){
+    const hh=$('viewer-header').offsetHeight+$('viewer-btns').offsetHeight;
+    const W=window.innerWidth,H=window.innerHeight-hh;
+    tRen.setSize(W,H); tCam.aspect=W/H; tCam.updateProjectionMatrix();
+  }
+});
+</script>
+</body>
+</html>
